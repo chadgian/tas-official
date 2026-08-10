@@ -1,0 +1,205 @@
+<div class="container-fluid py-4 py-lg-5">
+  <div class="row g-4 align-items-start">
+    <div class="col-12">
+      <div class="app-table-card p-3 p-lg-4">
+        <div id="trainings"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function(){
+    function fetchData() {
+      $.ajax({
+        url: '../processes/getTrainingLists.php',
+        type: 'GET',
+        success: function(data) {
+          displayTrainings(JSON.parse(data || '[]'));
+        }
+      });
+    }
+
+    function displayTrainings(trainingData){
+      const trainingSection = document.getElementById('trainings');
+      trainingSection.innerHTML = '';
+
+      if (!trainingData.length) {
+        trainingSection.innerHTML = `
+          <div class="text-center py-5">
+            <h3 class="mb-2">No trainings yet</h3>
+            <p class="app-muted mb-4">Create your first training to start managing participants and attendance.</p>
+            <a class="btn app-btn-primary" href="addTraining.php">Add a training</a>
+          </div>`;
+        return;
+      }
+
+      const currentYear = new Date().getFullYear();
+      const currentYearTrainings = [];
+      const archiveYears = {};
+
+      trainingData.forEach((item) => {
+        const dateLabel = String(item.Date || '');
+        const yearMatch = dateLabel.match(/(\d{4})$/);
+        const year = yearMatch ? yearMatch[1] : 'Unknown';
+        const monthLabel = dateLabel.replace(/\s+\d{4}$/, '').trim() || 'Unknown';
+
+        if (Number(year) === currentYear) {
+          currentYearTrainings.push(item);
+        } else {
+          if (!archiveYears[year]) archiveYears[year] = {};
+          if (!archiveYears[year][monthLabel]) archiveYears[year][monthLabel] = [];
+          archiveYears[year][monthLabel].push(item);
+        }
+      });
+
+      const parentAccordion = document.createElement('div');
+      parentAccordion.className = 'accordion app-training-list';
+      parentAccordion.id = 'accordionPanel';
+
+      const groupedCurrentMonths = {};
+      currentYearTrainings.forEach((item) => {
+        const monthLabel = String(item.Date || '').replace(/\s+\d{4}$/, '').trim() || 'Unknown';
+        if (!groupedCurrentMonths[monthLabel]) groupedCurrentMonths[monthLabel] = [];
+        groupedCurrentMonths[monthLabel].push(item);
+      });
+
+      const currentYearMonths = Object.keys(groupedCurrentMonths);
+      if (currentYearMonths.length) {
+        currentYearMonths.forEach((month, index) => {
+          const monthId = 'current-' + month.replace(/\s+/g, '-').toLowerCase();
+          const accordionItem = document.createElement('div');
+          accordionItem.className = 'accordion-item';
+
+          const heading = document.createElement('h2');
+          heading.className = 'accordion-header';
+          heading.innerHTML = `
+            <button class="accordion-button ${index === 0 ? '' : 'collapsed'} fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#${monthId}" aria-expanded="${index === 0 ? 'true' : 'false'}" aria-controls="${monthId}">
+              ${month} <span class="ms-2 text-muted fw-normal">${currentYear}</span>
+            </button>`;
+
+          const collapseItem = document.createElement('div');
+          collapseItem.className = `accordion-collapse collapse ${index === 0 ? 'show' : ''}`;
+          collapseItem.id = monthId;
+          collapseItem.setAttribute('data-bs-parent', '#accordionPanel');
+
+          const body = document.createElement('div');
+          body.className = 'accordion-body';
+          const cards = document.createElement('div');
+          cards.className = 'app-card-list w-100';
+
+          groupedCurrentMonths[month].forEach((element) => {
+            const card = document.createElement('a');
+            card.href = 'viewTraining.php?id=' + element.ID;
+            card.className = 'app-record-card text-decoration-none text-dark d-flex justify-content-between align-items-center gap-3';
+            card.innerHTML = `
+              <div>
+                <div class="app-kicker mb-1">Training</div>
+                <div class="h5 mb-1">${element.Training}</div>
+                <div class="app-muted small">${element.Date}</div>
+              </div>
+              <span class="btn app-btn-soft btn-sm">Open</span>`;
+            cards.appendChild(card);
+          });
+
+          body.appendChild(cards);
+          collapseItem.appendChild(body);
+          accordionItem.appendChild(heading);
+          accordionItem.appendChild(collapseItem);
+          parentAccordion.appendChild(accordionItem);
+        });
+      }
+
+      const yearEntries = Object.keys(archiveYears).sort((a, b) => b - a);
+      yearEntries.forEach((year) => {
+        const yearId = 'year-' + year;
+        const accordionItem = document.createElement('div');
+        accordionItem.className = 'accordion-item';
+
+        const heading = document.createElement('h2');
+        heading.className = 'accordion-header';
+        heading.innerHTML = `
+          <button class="accordion-button collapsed fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#${yearId}" aria-expanded="false" aria-controls="${yearId}">
+            ${year}
+          </button>`;
+
+        const collapseItem = document.createElement('div');
+        collapseItem.className = 'accordion-collapse collapse';
+        collapseItem.id = yearId;
+        collapseItem.setAttribute('data-bs-parent', '#accordionPanel');
+
+        const body = document.createElement('div');
+        body.className = 'accordion-body';
+
+        const monthGroups = archiveYears[year];
+        const monthEntries = Object.keys(monthGroups);
+        const nestedAccordion = document.createElement('div');
+        nestedAccordion.className = 'accordion app-training-list w-100';
+        nestedAccordion.id = `nested-${year}`;
+
+        monthEntries.forEach((month, monthIndex) => {
+          const monthId = `year-${year}-${month.replace(/\s+/g, '-').toLowerCase()}`;
+          const monthItem = document.createElement('div');
+          monthItem.className = 'accordion-item';
+
+          const monthHeader = document.createElement('h2');
+          monthHeader.className = 'accordion-header';
+          monthHeader.innerHTML = `
+            <button class="accordion-button ${monthIndex === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#${monthId}" aria-expanded="${monthIndex === 0 ? 'true' : 'false'}" aria-controls="${monthId}">
+              ${month}
+            </button>`;
+
+          const monthCollapse = document.createElement('div');
+          monthCollapse.className = `accordion-collapse collapse ${monthIndex === 0 ? 'show' : ''}`;
+          monthCollapse.id = monthId;
+          monthCollapse.setAttribute('data-bs-parent', `#nested-${year}`);
+
+          const monthBody = document.createElement('div');
+          monthBody.className = 'accordion-body';
+          const monthCards = document.createElement('div');
+          monthCards.className = 'app-card-list w-100';
+
+          monthGroups[month].forEach((element) => {
+            const card = document.createElement('a');
+            card.href = 'viewTraining.php?id=' + element.ID;
+            card.className = 'app-record-card text-decoration-none text-dark d-flex justify-content-between align-items-center gap-3';
+            card.innerHTML = `
+              <div>
+                <div class="app-kicker mb-1">Training</div>
+                <div class="h5 mb-1">${element.Training}</div>
+                <div class="app-muted small">${element.Date}</div>
+              </div>
+              <span class="btn app-btn-soft btn-sm">Open</span>`;
+            monthCards.appendChild(card);
+          });
+
+          monthBody.appendChild(monthCards);
+          monthCollapse.appendChild(monthBody);
+          monthItem.appendChild(monthHeader);
+          monthItem.appendChild(monthCollapse);
+          nestedAccordion.appendChild(monthItem);
+        });
+
+        body.appendChild(nestedAccordion);
+        collapseItem.appendChild(body);
+        accordionItem.appendChild(heading);
+        accordionItem.appendChild(collapseItem);
+        parentAccordion.appendChild(accordionItem);
+      });
+
+      if (yearEntries.length) {
+        const archiveSection = document.createElement('div');
+        archiveSection.className = 'app-mini-card my-3';
+        archiveSection.innerHTML = `
+          <div class="app-kicker mb-1">All Trainings</div>
+          <div class="app-muted small">Older years are grouped by year and month.</div>
+        `;
+        trainingSection.appendChild(archiveSection);
+      }
+
+      trainingSection.appendChild(parentAccordion);
+    }
+
+    fetchData();
+  });
+</script>
