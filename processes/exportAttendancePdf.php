@@ -180,6 +180,7 @@ $html = '
         </div>
         <p class="title">Training Attendance Report</p>
         <div class="subtitle"><b>Training:</b> ' . htmlspecialchars($trainingName) . '</div>
+        <div class="subtitle"><b>Training Date:</b> ' . htmlspecialchars($trainingDate) . '</div>
         <div class="subtitle"><b>Venue:</b> ' . htmlspecialchars($trainingVenue) . '</div>
         <div class="subtitle"><b>Training ID:</b> ' . htmlspecialchars($trainingID) . '</div>
         <div class="subtitle"><b>Exported On:</b> ' . htmlspecialchars($exportedOn) . '</div>
