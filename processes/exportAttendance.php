@@ -16,7 +16,7 @@ if ($trainingID === '') {
     exit();
 }
 
-$stmt = $conn->prepare("SELECT training_name, training_days FROM trainings WHERE training_id = ? LIMIT 1");
+$stmt = $conn->prepare("SELECT training_name, training_days, training_start_date, training_month, training_year FROM trainings WHERE training_id = ? LIMIT 1");
 $stmt->bind_param('s', $trainingID);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -31,6 +31,15 @@ if (!$training) {
 
 $trainingName = $training['training_name'] ?? 'Training';
 $trainingDays = (int)($training['training_days'] ?? 0);
+$trainingStartDate = $training['training_start_date'] ?? '';
+
+if ($trainingStartDate !== '') {
+    $start = new DateTime($trainingStartDate);
+    $end = (clone $start)->modify('+' . max($trainingDays - 1, 0) . ' days');
+    $trainingDate = $start->format('F j') . ($trainingDays > 1 ? '-' . $end->format('j') : '') . ', ' . $start->format('Y');
+} else {
+    $trainingDate = trim(($training['training_month'] ?? '') . ' ' . ($training['training_year'] ?? ''));
+}
 
 $participants = [];
 $dayData = [];
@@ -73,43 +82,45 @@ $sheet->setTitle('Attendance');
 
 $sheet->setCellValue('A1', 'Training Attendance');
 $sheet->setCellValue('A2', 'Training Name: ' . $trainingName);
-$sheet->setCellValue('A3', 'Training ID: ' . $trainingID);
+$sheet->setCellValue('A3', 'Training Date: ' . $trainingDate);
+$sheet->setCellValue('A4', 'Training ID: ' . $trainingID);
 
-$sheet->setCellValue('A5', 'No.');
-$sheet->setCellValue('B5', 'Participant Name');
-$sheet->setCellValue('C5', 'Agency');
+$sheet->setCellValue('A6', 'No.');
+$sheet->setCellValue('B6', 'Participant Name');
+$sheet->setCellValue('C6', 'Agency');
 
 $col = 4;
 for ($day = 1; $day <= $trainingDays; $day++) {
     $dayLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
     $nextLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col + 1);
-    $sheet->setCellValue($dayLetter . '5', "Day {$day}");
-    $sheet->setCellValue($dayLetter . '6', 'In');
-    $sheet->setCellValue($nextLetter . '6', 'Out');
-    $sheet->mergeCells($dayLetter . '5:' . $nextLetter . '5');
+    $sheet->setCellValue($dayLetter . '6', "Day {$day}");
+    $sheet->setCellValue($dayLetter . '7', 'In');
+    $sheet->setCellValue($nextLetter . '7', 'Out');
+    $sheet->mergeCells($dayLetter . '6:' . $nextLetter . '6');
     $col += 2;
 }
-
-$sheet->mergeCells('A1:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(max(3, 3 + ($trainingDays * 2))) . '1');
-$sheet->mergeCells('A2:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(max(3, 3 + ($trainingDays * 2))) . '2');
-$sheet->mergeCells('A3:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(max(3, 3 + ($trainingDays * 2))) . '3');
 
 $lastColumnIndex = max(3, 3 + ($trainingDays * 2));
 $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColumnIndex);
 
-$sheet->getStyle('A1:' . $lastColumn . '6')->getFont()->setName('Arial');
-$sheet->getStyle('A1:' . $lastColumn . '6')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+$sheet->mergeCells('A1:' . $lastColumn . '1');
+$sheet->mergeCells('A2:' . $lastColumn . '2');
+$sheet->mergeCells('A3:' . $lastColumn . '3');
+$sheet->mergeCells('A4:' . $lastColumn . '4');
+
+$sheet->getStyle('A1:' . $lastColumn . '7')->getFont()->setName('Arial');
+$sheet->getStyle('A1:' . $lastColumn . '7')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-$sheet->getStyle('A5:' . $lastColumn . '6')->getFont()->setBold(true);
-$sheet->getStyle('A5:' . $lastColumn . '6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-$sheet->getStyle('A5:' . $lastColumn . '6')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9EEF7');
+$sheet->getStyle('A6:' . $lastColumn . '7')->getFont()->setBold(true);
+$sheet->getStyle('A6:' . $lastColumn . '7')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+$sheet->getStyle('A6:' . $lastColumn . '7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9EEF7');
 
-$row = 7;
+$row = 8;
 if (empty($participants)) {
-    $sheet->setCellValue('A7', 'No participants found.');
-    $sheet->mergeCells('A7:' . $lastColumn . '7');
-    $sheet->getStyle('A7')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $sheet->setCellValue('A8', 'No participants found.');
+    $sheet->mergeCells('A8:' . $lastColumn . '8');
+    $sheet->getStyle('A8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 } else {
     foreach ($participants as $participant) {
         $fullName = trim($participant['lastname'] . ', ' . $participant['firstname'] . ' ' . $participant['middle_initial']);
@@ -131,9 +142,9 @@ if (empty($participants)) {
     }
 }
 
-$lastRow = max($row - 1, 7);
+$lastRow = max($row - 1, 8);
 
-$sheet->getStyle("A5:{$lastColumn}{$lastRow}")->applyFromArray([
+$sheet->getStyle("A6:{$lastColumn}{$lastRow}")->applyFromArray([
     'borders' => [
         'allBorders' => [
             'borderStyle' => Border::BORDER_THIN,
@@ -146,8 +157,8 @@ for ($i = 1; $i <= $lastColumnIndex; $i++) {
     $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))->setAutoSize(true);
 }
 
-$sheet->freezePane('A7');
-$sheet->setAutoFilter("A5:{$lastColumn}{$lastRow}");
+$sheet->freezePane('A8');
+$sheet->setAutoFilter("A6:{$lastColumn}{$lastRow}");
 
 $writer = new Xlsx($spreadsheet);
 $filename = preg_replace('/[^A-Za-z0-9_-]+/', '_', $trainingName) . '_Attendance_Report.xlsx';
