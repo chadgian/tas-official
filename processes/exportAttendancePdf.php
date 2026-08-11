@@ -29,14 +29,15 @@ if (!$training) {
 
 $trainingName = $training['training_name'];
 $trainingDays = (int)$training['training_days'];
-$trainingStartDate = $training['training_start_date'] ?? '';
-$trainingVenue = $training['training_venue'] ?? '';
+$trainingStartDate = trim((string)($training['training_start_date'] ?? ''));
+$trainingVenue = trim((string)($training['training_venue'] ?? ''));
 $exportedOn = date('F j, Y h:i A');
 $exportedAtIso = date('c');
 
-if ($trainingStartDate === '' || trim((string)$trainingVenue) === '') {
-    header("Location: ../pages/viewTraining.php?id=$trainingID");
-    exit();
+// Older trainings may not have these newer fields populated. Keep report
+// generation available and make missing metadata explicit in the output.
+if ($trainingVenue === '') {
+    $trainingVenue = 'Not specified';
 }
 
 $participants = [];
@@ -142,8 +143,21 @@ $qrOptions = new QROptions([
 ]);
 
 $qrCode = new QRCode($qrOptions);
-$qrCodePath = $qrCode->render($verificationPayload);
-$qrImageBase64 = base64_encode(file_get_contents($qrCodePath));
+$qrCodeOutput = $qrCode->render($verificationPayload);
+$qrCodePath = null;
+
+if (str_starts_with($qrCodeOutput, 'data:image/')) {
+    $separatorPosition = strpos($qrCodeOutput, ',');
+    if ($separatorPosition === false) {
+        throw new RuntimeException('Unable to generate the verification QR code.');
+    }
+    $qrImageBase64 = substr($qrCodeOutput, $separatorPosition + 1);
+} elseif (is_file($qrCodeOutput)) {
+    $qrCodePath = $qrCodeOutput;
+    $qrImageBase64 = base64_encode((string)file_get_contents($qrCodePath));
+} else {
+    $qrImageBase64 = base64_encode($qrCodeOutput);
+}
 
 $html = '
 <html>
@@ -269,7 +283,9 @@ $mpdf->WriteHTML($html);
 $filename = preg_replace('/[^A-Za-z0-9_-]+/', '_', $trainingName) . '_Attendance_Report.pdf';
 $mpdf->Output($filename, 'D');
 
-@unlink($qrCodePath);
+if ($qrCodePath !== null) {
+    @unlink($qrCodePath);
+}
 
 $conn->close();
 ?>
